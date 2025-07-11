@@ -27,6 +27,7 @@ use crate::utilities::zk_pdl_with_slack::PDLwSlackProof;
 use crate::utilities::zk_pdl_with_slack::PDLwSlackStatement;
 use crate::utilities::zk_pdl_with_slack::PDLwSlackWitness;
 use zk_paillier::zkproofs::{CompositeDLogProof, DLogStatement, NiCorrectKeyProof};
+use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EcKeyPair {
@@ -45,7 +46,7 @@ pub struct CommWitness {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PaillierKeyPair {
     pub ek: EncryptionKey,
-    dk: DecryptionKey,
+    pub dk: DecryptionKey,
     pub encrypted_share: BigInt,
     randomness: BigInt,
 }
@@ -160,10 +161,8 @@ pub mod keygen {
         proof: &DLogProof<Secp256k1, Sha256>
     ) -> Result<(KeyGenMsg2, PaillierKeyPair, Party1Private), ProofError> {
         let comm_witness = verify_and_decommit(comm_witness, proof)?;
-
         let paillier_key_pair =
             PaillierKeyPair::generate_keypair_and_encrypted_share(&ec_key_pair_party1);
-
         // party one set her private key:
         let party_one_private = Party1Private::set_private_key(&ec_key_pair_party1, &paillier_key_pair);
 
@@ -460,7 +459,7 @@ pub mod sign {
     }
 
     // P1's second message (phase 5)
-    pub fn second_message(
+    pub fn  second_message(
         party_one_private: &Party1Private,
         party_one_public: &Point<Secp256k1>,
         partial_sig_c3: &BigInt,
@@ -468,7 +467,7 @@ pub mod sign {
         ephemeral_other_public_share: &Point<Secp256k1>,
         r3_pub: &Point<Secp256k1>,
         message: &BigInt,
-    ) -> crate::EncryptedSignature {
+    ) -> (crate::EncryptedSignature, u128) {
         // compute r = k1 * R3
         let r = r3_pub * &k1.secret_share;
         let rx = Scalar::<Secp256k1>::from_bigint(&r.x_coord().unwrap()
@@ -481,6 +480,7 @@ pub mod sign {
             .0;
         let s_prime = Scalar::<Secp256k1>::from_bigint(&s_tag.mod_floor(Scalar::<Secp256k1>::group_order()));
 
+        let start1 = Instant::now();
         // compute U = r * Q + m * G.
         let r_q = party_one_public * &rx;
         let m_gen = Point::<Secp256k1>::generator() * Scalar::<Secp256k1>::from_bigint(&message);
@@ -489,12 +489,12 @@ pub mod sign {
         if *ephemeral_other_public_share == u {
             panic!("invalid pre-signature")
         }
-
+        let duration1 = start1.elapsed().as_nanos();
         let k1_inv = k1.secret_share.invert().unwrap();
 
         let sd_prime = k1_inv * &s_prime;
 
-        crate::EncryptedSignature { sd_prime: sd_prime.to_bigint() }
+        (crate::EncryptedSignature { sd_prime: sd_prime.to_bigint() },duration1)
     }
 
     pub fn recover_witness(adaptor: crate::EncryptedSignature, signature: &crate::Signature) -> Scalar<Secp256k1> {

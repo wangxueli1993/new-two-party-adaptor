@@ -2,18 +2,24 @@ use crate::{party_one, party_two};
 use curv::arithmetic::traits::Samplable;
 use curv::elliptic::curves::{secp256_k1::Secp256k1, Scalar};
 use curv::BigInt;
+use std::time::{Duration, Instant};
 
 #[test]
 fn test_two_party_sign() {
+    let start1 = Instant::now();
     // assume party1 and party2 engaged with KeyGen in the past resulting in
     // party1 owning private share and paillier key-pair
     // party2 owning private share and paillier encryption of party1 share
-    let (_, _comm_witness, keypair_party1) = party_one::keygen::first_message();
+    let (party_one_first_message, comm_witness, keypair_party1) = party_one::keygen::first_message();
     let (party_two_private_share_gen, keypair_party2) = party_two::keygen::first_message();
-
-    let keypair =
-        party_one::PaillierKeyPair::generate_keypair_and_encrypted_share(&keypair_party1);
-
+    let duration1 = start1.elapsed();
+    // let keypair =
+    //     party_one::PaillierKeyPair::generate_keypair_and_encrypted_share(&keypair_party1);
+    let (party_one_second_message, keypair, party1_private) = party_one::keygen::second_message(comm_witness.clone(), &keypair_party1, &comm_witness.d_log_proof).unwrap();
+    let salt:&[u8] = &[75, 90, 101, 110];
+    let (_party_two_paillier) = party_two::keygen::second_message(&party_one_first_message, &party_one_second_message, salt);
+    println!("duration1 = {:?}", duration1);
+    let start2 = Instant::now();
     // generating adaptor witness (y)
     let y = Scalar::<Secp256k1>::random();
 
@@ -42,7 +48,7 @@ fn test_two_party_sign() {
     )
         .expect("failed to verify commitments and DLog proof");
 
-    let party1_private = party_one::Party1Private::set_private_key(&keypair_party1, &keypair);
+    //let party1_private = party_one::Party1Private::set_private_key(&keypair_party1, &keypair);
 
     let encrypted_sig = party_one::sign::second_message(
         &party1_private,
@@ -53,7 +59,11 @@ fn test_two_party_sign() {
         &p2_presign_local1.k3_pair.public_share,
         &message,
     );
-    let signature = party_two::sign::decrypt_signature(&encrypted_sig, &y, &r1.public_share, &p2_presign_local1.k3_pair);
+
+    let duration2 = start2.elapsed();
+    println!("duration2 = {:?}", duration2);
+    
+    let signature = party_two::sign::decrypt_signature(&encrypted_sig, &y, &r1.public_share, &p2_presign_local1.k3_pair.secret_share);
 
     let pubkey =
         party_one::keygen::compute_pubkey(&keypair_party1, &party_two_private_share_gen.public_share);
