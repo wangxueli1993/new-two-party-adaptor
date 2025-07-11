@@ -1,2 +1,2 @@
-# two-party-adaptor
-Joint pre-signature (adaptor) generation based on 2-Party ECDSA [Lindell'17] and Adaptor Signatures described in https://eprint.iacr.org/2018/472.pdf
+# Implementation of Two-Party Adaptor Signature: New Definition and Efficient Constructions from ECDSA
+we experimentally evaluate our two ECDSA-2AS and then compare with the state-of-the-art work [ MMS+19 ].
